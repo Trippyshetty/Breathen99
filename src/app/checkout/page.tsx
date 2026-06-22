@@ -2,7 +2,8 @@
 import { useEffect, useState, useCallback } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import Script from 'next/script';
+
+const RAZORPAY_SRC = 'https://checkout.razorpay.com/v1/checkout.js';
 
 const CONFIG = {
   RAZORPAY_KEY_ID: 'rzp_live_SeBOlcvnSd74TA',
@@ -54,6 +55,18 @@ export default function CheckoutPage() {
   // which caused the "Application error: a client-side exception" crash.
   const [mounted, setMounted] = useState(false);
   useEffect(() => { setMounted(true); }, []);
+
+  // Inject the Razorpay checkout script on the client only. Using a manually
+  // injected <script> (instead of next/script) keeps it entirely out of the
+  // static-export/SSR/hydration path, which was triggering the crash.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (document.querySelector(`script[src="${RAZORPAY_SRC}"]`)) return;
+    const s = document.createElement('script');
+    s.src = RAZORPAY_SRC;
+    s.async = true;
+    document.body.appendChild(s);
+  }, []);
 
   const { base, bulkAmt, couponAmt, total, tier } = calcPrices(qty, coupon.applied, coupon.pct);
 
@@ -124,7 +137,14 @@ export default function CheckoutPage() {
       couponCode: coupon.applied ? coupon.code : '', couponPct: coupon.applied ? coupon.pct : 0,
     };
 
-    // @ts-ignore
+    // Guard every Razorpay/window access — only ever runs in the browser.
+    if (typeof window === 'undefined' || !(window as { Razorpay?: unknown }).Razorpay) {
+      setPaying(false);
+      alert('Payment system is still loading. Please wait a moment and try again.');
+      return;
+    }
+
+    // @ts-ignore — Razorpay is injected at runtime via the script above
     const rzp = new window.Razorpay({
       key: CONFIG.RAZORPAY_KEY_ID,
       amount: total * 100,
@@ -161,8 +181,6 @@ export default function CheckoutPage() {
 
   return (
     <>
-      <Script src="https://checkout.razorpay.com/v1/checkout.js" strategy="lazyOnload" />
-
       {/* Checkout-specific styles */}
       <style>{`
         *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
