@@ -3,6 +3,15 @@ import { useEffect, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 
+// Same manual grouping as the checkout page: identical output on every device.
+function inr(n: number): string {
+  if (!Number.isFinite(n)) return '0';
+  const s = Math.round(Math.abs(n)).toString();
+  const last3 = s.slice(-3);
+  const rest = s.slice(0, -3);
+  return rest ? `${rest.replace(/B(?=(d{2})+(?!d))/g, ',')},${last3}` : last3;
+}
+
 export default function ThankyouPage() {
   const [data, setData] = useState({ name:'', qty:'', amount:'', paymentId:'' });
 
@@ -18,7 +27,7 @@ export default function ThankyouPage() {
 
   return (
     <>
-      <style>{`
+      <style dangerouslySetInnerHTML={{ __html: `
         *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
         :root{--red:#e8260a;--black:#0a0a0a;--white:#ffffff;--gray-200:#e8e8e8;--gray-400:#999;--gray-600:#555;--font-sans:'DM Sans',sans-serif;--font-serif:'Playfair Display',serif}
         html,body{font-family:var(--font-sans);background:#fafafa;color:var(--black);min-height:100vh}
@@ -37,7 +46,7 @@ export default function ThankyouPage() {
         .btn-home:hover{background:#b81d07}
         .whatsapp-note{margin-top:20px;font-size:.82rem;color:var(--gray-600)}
         .whatsapp-note a{color:var(--red);text-decoration:none}
-      `}</style>
+      ` }} />
 
       <div className="topbar">
         <Image src="/assets/logo-white.jpg" alt="breathEN" width={120} height={36} style={{ objectFit:'contain' }} />
@@ -58,7 +67,7 @@ export default function ThankyouPage() {
             <h4>Order Details</h4>
             {data.name && <div className="ty-row"><span className="label">Name</span><span>{data.name}</span></div>}
             <div className="ty-row"><span className="label">Quantity</span><span>{data.qty} can{parseInt(data.qty)>1?'s':''}</span></div>
-            <div className="ty-row"><span className="label">Amount Paid</span><span>₹{parseInt(data.amount).toLocaleString('en-IN')}</span></div>
+            <div className="ty-row"><span className="label">Amount Paid</span><span>₹{inr(parseInt(data.amount, 10))}</span></div>
             <div className="ty-row"><span className="label">Shipping</span><span style={{ color:'#1a8a3a' }}>FREE</span></div>
             {data.paymentId && <div className="ty-pid">Payment ID: {data.paymentId}</div>}
           </div>

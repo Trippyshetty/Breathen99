@@ -15,6 +15,29 @@ const isValidRazorpayPaymentId = (id: unknown): id is string =>
 
 const UNVERIFIED_PAYMENT_MSG = 'Payment could not be verified. Please try again.';
 
+// Indian digit grouping done by hand. Number.prototype.toLocaleString('en-IN')
+// depends on the browser's ICU data, and plenty of older Android WebViews ship
+// it trimmed — so the server and the device produced different text for the same
+// number, which breaks hydration. This is identical everywhere.
+function inr(n: number): string {
+  if (!Number.isFinite(n)) return '0';
+  const s = Math.round(Math.abs(n)).toString();
+  const last3 = s.slice(-3);
+  const rest = s.slice(0, -3);
+  const grouped = rest ? `${rest.replace(/B(?=(d{2})+(?!d))/g, ',')},${last3}` : last3;
+  return `${n < 0 ? '-' : ''}${grouped}`;
+}
+
+// IST is a fixed UTC+5:30 with no DST, so this needs no timezone database.
+// toLocaleString(..., { timeZone: 'Asia/Kolkata' }) throws RangeError on
+// browsers built without full ICU, which would have failed the order write.
+function istTimestamp(): string {
+  const d = new Date(Date.now() + 5.5 * 60 * 60 * 1000);
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${p(d.getUTCDate())}/${p(d.getUTCMonth() + 1)}/${d.getUTCFullYear()}, ` +
+         `${p(d.getUTCHours())}:${p(d.getUTCMinutes())}:${p(d.getUTCSeconds())}`;
+}
+
 const CONFIG = {
   RAZORPAY_KEY_ID: 'rzp_live_SeBOlcvnSd74TA',
   APPS_SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbzsee0P6vdSDeZ_n9O9wOW5uv3h5_vWe86CufA_PwkjuZo1XVAwoAw7iNAr5uxfSt24-Q/exec',
@@ -115,7 +138,7 @@ export default function CheckoutClient() {
     }
     const params = new URLSearchParams({
       action:'saveOrder',
-      date: new Date().toLocaleString('en-IN', { timeZone:'Asia/Kolkata' }),
+      date: istTimestamp(),
       name: String(orderData.name),
       phone: String(orderData.phone),
       email: String(orderData.email),
@@ -207,12 +230,12 @@ export default function CheckoutClient() {
     rzp.open();
   };
 
-  const totalFmt = total.toLocaleString('en-IN');
+  const totalFmt = inr(total);
 
   return (
     <>
       {/* Checkout-specific styles */}
-      <style>{`
+      <style dangerouslySetInnerHTML={{ __html: `
         *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
         :root{--red:#e8260a;--red-dark:#b81d07;--red-light:#fef2f0;--black:#0a0a0a;--white:#ffffff;--gray-50:#fafafa;--gray-100:#f4f4f4;--gray-200:#e8e8e8;--gray-400:#999;--gray-600:#555;--gray-800:#222;--font-sans:'DM Sans',sans-serif;--font-serif:'Playfair Display',serif;--font-display:'Bebas Neue',sans-serif}
         html{font-size:16px;scroll-behavior:smooth}
@@ -284,7 +307,7 @@ export default function CheckoutClient() {
         .msb-total{font-weight:600}
         .mobile-pay-bar{display:none;position:fixed;bottom:0;left:0;right:0;padding:12px 16px;background:#fff;border-top:1px solid #e8e8e8;z-index:200}
         @media(max-width:760px){.mobile-pay-bar{display:block}}
-      `}</style>
+      ` }} />
 
       <div className="topbar">
         <Link href="/" className="topbar-logo" style={{ display:'flex' }}>
@@ -307,7 +330,7 @@ export default function CheckoutClient() {
         </div>
         {(tier.discountPct > 0 || couponAmt > 0) && (
           <div className="msb-row" style={{ fontSize:11, color:'#1a8a3a', marginTop:2 }}>
-            <span>{tier.discountPct === 33 ? `Buy 4 Get 2 Free · Save ₹${(bulkAmt+couponAmt).toLocaleString('en-IN')}` : `You save ₹${(bulkAmt+couponAmt).toLocaleString('en-IN')}`}</span>
+            <span>{tier.discountPct === 33 ? `Buy 4 Get 2 Free · Save ₹${inr(bulkAmt+couponAmt)}` : `You save ₹${inr(bulkAmt+couponAmt)}`}</span>
           </div>
         )}
       </div>
@@ -413,9 +436,9 @@ export default function CheckoutClient() {
               <div className="summary-product-qty">×{qty}</div>
             </div>
 
-            <div className="summary-line"><span>Subtotal ({qty} can{qty>1?'s':''})</span><span>₹{base.toLocaleString('en-IN')}</span></div>
-            {tier.discountPct>0 && <div className="summary-line discount"><span>{tier.discountPct===33?'Buy 4 Get 2 Free':`Bulk discount (${tier.discountPct}%)`}</span><span>−₹{bulkAmt.toLocaleString('en-IN')}</span></div>}
-            {coupon.applied && couponAmt>0 && <div className="summary-line coupon"><span>Coupon ({coupon.code})</span><span>−₹{couponAmt.toLocaleString('en-IN')}</span></div>}
+            <div className="summary-line"><span>Subtotal ({qty} can{qty>1?'s':''})</span><span>₹{inr(base)}</span></div>
+            {tier.discountPct>0 && <div className="summary-line discount"><span>{tier.discountPct===33?'Buy 4 Get 2 Free':`Bulk discount (${tier.discountPct}%)`}</span><span>−₹{inr(bulkAmt)}</span></div>}
+            {coupon.applied && couponAmt>0 && <div className="summary-line coupon"><span>Coupon ({coupon.code})</span><span>−₹{inr(couponAmt)}</span></div>}
             <div className="summary-line"><span>Shipping</span><span style={{ color:'#1a8a3a', fontWeight:500 }}>FREE</span></div>
             <hr className="summary-divider" />
             <div className="summary-total"><span>Total</span><span>₹{totalFmt}</span></div>

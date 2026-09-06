@@ -1,7 +1,5 @@
 'use client';
-import dynamic from 'next/dynamic';
-
-const CheckoutClient = dynamic(() => import('@/components/CheckoutClient'), { ssr: false });
+import CheckoutClient from '@/components/CheckoutClient';
 
 export default function CheckoutPage() {
   return <CheckoutClient />;
