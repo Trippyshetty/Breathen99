@@ -5,15 +5,44 @@ import Link from 'next/link';
 
 const RAZORPAY_SRC = 'https://checkout.razorpay.com/v1/checkout.js';
 
-// A real Razorpay payment id looks like `pay_ABC123xyz`. Nothing is written to
-// Sheets (which is what fires the confirmation email) and the customer is never
-// sent to /thankyou unless the id Razorpay handed us matches this exactly.
-// There is deliberately no fallback and no generated id.
-const RAZORPAY_PAYMENT_ID_RE = /^pay_[A-Za-z0-9]+$/;
+// Shape checks only. They are a cheap filter before the round trip — the
+// authority on whether a payment is real is the backend, which verifies
+// razorpay_signature against the key secret and confirms capture with the
+// Razorpay API. Nothing here can approve an order on its own.
 const isValidRazorpayPaymentId = (id: unknown): id is string =>
-  typeof id === 'string' && RAZORPAY_PAYMENT_ID_RE.test(id);
+  typeof id === 'string' && /^pay_[A-Za-z0-9]+$/.test(id);
+const isValidRazorpayOrderId = (id: unknown): id is string =>
+  typeof id === 'string' && /^order_[A-Za-z0-9]+$/.test(id);
+const isValidRazorpaySignature = (s: unknown): s is string =>
+  typeof s === 'string' && /^[a-fA-F0-9]{64}$/.test(s);
 
 const UNVERIFIED_PAYMENT_MSG = 'Payment could not be verified. Please try again.';
+
+// What Razorpay hands the success handler when checkout is opened with an
+// order_id. razorpay_signature is HMAC-SHA256(order_id|payment_id, key_secret).
+type RazorpaySuccess = {
+  razorpay_payment_id: string;
+  razorpay_order_id: string;
+  razorpay_signature: string;
+};
+
+type CreateOrderResponse = {
+  ok?: boolean;
+  orderId?: string;
+  amount?: number;
+  currency?: string;
+  keyId?: string;
+  error?: string;
+  message?: string;
+};
+
+type VerifyResponse = {
+  ok?: boolean;
+  amount?: number;
+  duplicate?: boolean;
+  error?: string;
+  reason?: string;
+};
 
 // Indian digit grouping done by hand. Number.prototype.toLocaleString('en-IN')
 // depends on the browser's ICU data, and plenty of older Android WebViews ship
@@ -33,16 +62,6 @@ function inr(n: number): string {
   }
   if (head) groups.unshift(head);
   return `${sign}${groups.join(',')},${tail}`;
-}
-
-// IST is a fixed UTC+5:30 with no DST, so this needs no timezone database.
-// toLocaleString(..., { timeZone: 'Asia/Kolkata' }) throws RangeError on
-// browsers built without full ICU, which would have failed the order write.
-function istTimestamp(): string {
-  const d = new Date(Date.now() + 5.5 * 60 * 60 * 1000);
-  const p = (n: number) => String(n).padStart(2, '0');
-  return `${p(d.getUTCDate())}/${p(d.getUTCMonth() + 1)}/${d.getUTCFullYear()}, ` +
-         `${p(d.getUTCHours())}:${p(d.getUTCMinutes())}:${p(d.getUTCSeconds())}`;
 }
 
 const CONFIG = {
@@ -137,27 +156,41 @@ export default function CheckoutClient() {
     }
   };
 
-  // Only ever called from the Razorpay success handler, and only with the id that
-  // came back on that response. Re-validates so no future caller can bypass it.
-  const saveToSheets = async (orderData: Record<string,unknown>, paymentId: string) => {
-    if (!isValidRazorpayPaymentId(paymentId)) {
-      throw new Error(`Refusing to save order: invalid Razorpay payment id (${String(paymentId)})`);
-    }
+  // Ask the backend to create a Razorpay order. The server computes the price
+  // from qty + coupon and creates the order for that amount — the browser never
+  // sends an amount, so it cannot choose what to be charged.
+  const createOrder = async (): Promise<CreateOrderResponse> => {
     const params = new URLSearchParams({
-      action:'saveOrder',
-      date: istTimestamp(),
-      name: String(orderData.name),
-      phone: String(orderData.phone),
-      email: String(orderData.email),
-      address: `${orderData.address}, ${orderData.city}, ${orderData.state} — ${orderData.pin}`,
-      qty: String(orderData.qty),
-      amount: String(orderData.amount),
-      bulkPct: String(orderData.bulkPct),
-      couponUsed: String(orderData.couponCode),
-      couponPct: String(orderData.couponPct),
-      paymentId,
+      action: 'createOrder',
+      qty: String(qty),
+      coupon: coupon.applied ? coupon.code : '',
+      name: form.name.trim(),
+      phone: form.phone.replace(/[\s-]/g, ''),
+      email: form.email.trim(),
+      address: form.address.trim(),
+      city: form.city.trim(),
+      pin: form.pin.trim(),
+      state: form.state,
     });
-    await fetch(`${CONFIG.APPS_SCRIPT_URL}?${params.toString()}`, { method:'GET', mode:'no-cors' });
+    const res = await fetch(`${CONFIG.APPS_SCRIPT_URL}?${params.toString()}`);
+    if (!res.ok) throw new Error(`createOrder http ${res.status}`);
+    return (await res.json()) as CreateOrderResponse;
+  };
+
+  // Hand the payment back to the backend, which verifies razorpay_signature
+  // against the key secret and confirms with the Razorpay API that the money was
+  // actually captured for the amount we asked for. Only the backend can decide
+  // that an order is real; this call just reports and reads the verdict.
+  const verifyAndSave = async (r: RazorpaySuccess): Promise<VerifyResponse> => {
+    const params = new URLSearchParams({
+      action: 'verifyAndSave',
+      orderId: r.razorpay_order_id,
+      paymentId: r.razorpay_payment_id,
+      signature: r.razorpay_signature,
+    });
+    const res = await fetch(`${CONFIG.APPS_SCRIPT_URL}?${params.toString()}`);
+    if (!res.ok) throw new Error(`verifyAndSave http ${res.status}`);
+    return (await res.json()) as VerifyResponse;
   };
 
   const handlePay = async () => {
@@ -169,13 +202,6 @@ export default function CheckoutClient() {
     setPayError('');
     setPaying(true);
 
-    const orderData = {
-      name: form.name.trim(), phone: form.phone.replace(/\s/g,''), email: form.email.trim(),
-      address: form.address.trim(), city: form.city.trim(), pin: form.pin.trim(), state: form.state,
-      qty, amount: total, bulkPct: tier.discountPct,
-      couponCode: coupon.applied ? coupon.code : '', couponPct: coupon.applied ? coupon.pct : 0,
-    };
-
     // Guard every Razorpay/window access — only ever runs in the browser.
     if (typeof window === 'undefined' || !(window as { Razorpay?: unknown }).Razorpay) {
       setPaying(false);
@@ -183,11 +209,39 @@ export default function CheckoutClient() {
       return;
     }
 
+    // Step 1 — the server creates the order and decides the amount.
+    let order: CreateOrderResponse;
+    try {
+      order = await createOrder();
+    } catch {
+      setPaying(false);
+      setPayError('Could not start checkout. Please check your connection and try again.');
+      return;
+    }
+
+    if (!order?.ok || !isValidRazorpayOrderId(order.orderId) || !(Number(order.amount) > 0)) {
+      setPaying(false);
+      setPayError(order?.message || 'Could not start checkout. Please refresh the page and try again.');
+      return;
+    }
+
+    // The server is the authority on price. If its figure differs from what the
+    // page is showing, stop rather than charge a number the customer never saw.
+    if (Number(order.amount) !== total) {
+      setPaying(false);
+      setPayError(
+        `The price has changed to ₹${inr(Number(order.amount))}. ` +
+        'Please refresh the page to see the updated total before paying.'
+      );
+      return;
+    }
+
     // @ts-ignore — Razorpay is injected at runtime via the script above
     const rzp = new window.Razorpay({
-      key: CONFIG.RAZORPAY_KEY_ID,
-      amount: total * 100,
-      currency: 'INR',
+      key: order.keyId || CONFIG.RAZORPAY_KEY_ID,
+      order_id: order.orderId,          // binds this checkout to the server's order
+      amount: Number(order.amount) * 100,
+      currency: order.currency || 'INR',
       name: CONFIG.BUSINESS_NAME,
       description: `breathEN × ${qty} can${qty > 1 ? 's' : ''}`,
       image: CONFIG.BUSINESS_LOGO,
@@ -198,38 +252,58 @@ export default function CheckoutClient() {
       },
       theme: { color: '#e8260a' },
       modal: { ondismiss: () => setPaying(false) },
-      // The ONLY place an order is saved or the customer is redirected. Razorpay
-      // invokes this solely after a payment it has itself confirmed as captured.
-      handler: async (response: { razorpay_payment_id?: string }) => {
+      // Step 2 — report the payment. The backend verifies the signature and asks
+      // Razorpay whether it was really captured; only its verdict lets the
+      // customer through to /thankyou.
+      handler: async (response: Partial<RazorpaySuccess>) => {
         const paymentId = response?.razorpay_payment_id;
+        const orderId = response?.razorpay_order_id;
+        const signature = response?.razorpay_signature;
 
-        // No id, malformed id, or anything that isn't `pay_<alphanumeric>`:
-        // save nothing, send no confirmation, do not redirect.
-        if (!isValidRazorpayPaymentId(paymentId)) {
+        // Cheap local sanity check before the round trip. The real gate is the
+        // server; this only avoids an obviously pointless request.
+        if (!isValidRazorpayPaymentId(paymentId) ||
+            !isValidRazorpayOrderId(orderId) ||
+            !isValidRazorpaySignature(signature)) {
           setPaying(false);
           setPayError(UNVERIFIED_PAYMENT_MSG);
           return;
         }
 
+        let verdict: VerifyResponse;
         try {
-          await saveToSheets(orderData, paymentId);
+          verdict = await verifyAndSave({
+            razorpay_payment_id: paymentId,
+            razorpay_order_id: orderId,
+            razorpay_signature: signature,
+          });
         } catch {
-          // Payment is real but we could not record it — never silently drop it.
+          // The payment may well be real; we simply could not reach the backend.
+          // Do not claim success, and give the customer their reference.
           setPaying(false);
           setPayError(
-            `Your payment went through (ref ${paymentId}) but we could not save your order. ` +
-            'Please contact us with this reference and we will confirm it manually.'
+            `We could not confirm your payment (ref ${paymentId}). Do not pay again — ` +
+            'please send us this reference on WhatsApp and we will check it for you.'
           );
           return;
         }
 
+        if (!verdict?.ok) {
+          setPaying(false);
+          setPayError(UNVERIFIED_PAYMENT_MSG);
+          return;
+        }
+
         const p = new URLSearchParams({
-          name: form.name, qty: String(qty), amount: String(total), paymentId,
+          name: form.name,
+          qty: String(qty),
+          amount: String(verdict.amount ?? order.amount),
+          paymentId,
         });
         window.location.href = `/thankyou/?${p.toString()}`;
       },
     });
-    // Failed payment: no save, no redirect.
+    // Failed payment: nothing is reported, nothing is saved, no redirect.
     rzp.on('payment.failed', (r: { error?: { description?: string } }) => {
       setPaying(false);
       setPayError(`Payment failed: ${r?.error?.description || 'the payment was not completed'}. Please try again.`);
