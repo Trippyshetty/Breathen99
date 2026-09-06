@@ -5,6 +5,16 @@ import Link from 'next/link';
 
 const RAZORPAY_SRC = 'https://checkout.razorpay.com/v1/checkout.js';
 
+// A real Razorpay payment id looks like `pay_ABC123xyz`. Nothing is written to
+// Sheets (which is what fires the confirmation email) and the customer is never
+// sent to /thankyou unless the id Razorpay handed us matches this exactly.
+// There is deliberately no fallback and no generated id.
+const RAZORPAY_PAYMENT_ID_RE = /^pay_[A-Za-z0-9]+$/;
+const isValidRazorpayPaymentId = (id: unknown): id is string =>
+  typeof id === 'string' && RAZORPAY_PAYMENT_ID_RE.test(id);
+
+const UNVERIFIED_PAYMENT_MSG = 'Payment could not be verified. Please try again.';
+
 const CONFIG = {
   RAZORPAY_KEY_ID: 'rzp_live_SeBOlcvnSd74TA',
   APPS_SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbzsee0P6vdSDeZ_n9O9wOW5uv3h5_vWe86CufA_PwkjuZo1XVAwoAw7iNAr5uxfSt24-Q/exec',
@@ -49,6 +59,7 @@ export default function CheckoutClient() {
   const [couponStatus, setCouponStatus] = useState<{ type:'success'|'error'|'', msg:string }>({ type:'', msg:'' });
   const [couponLoading, setCouponLoading] = useState(false);
   const [paying, setPaying] = useState(false);
+  const [payError, setPayError] = useState('');
 
   // Inject the Razorpay checkout script on the client only.
   useEffect(() => {
@@ -96,7 +107,12 @@ export default function CheckoutClient() {
     }
   };
 
+  // Only ever called from the Razorpay success handler, and only with the id that
+  // came back on that response. Re-validates so no future caller can bypass it.
   const saveToSheets = async (orderData: Record<string,unknown>, paymentId: string) => {
+    if (!isValidRazorpayPaymentId(paymentId)) {
+      throw new Error(`Refusing to save order: invalid Razorpay payment id (${String(paymentId)})`);
+    }
     const params = new URLSearchParams({
       action:'saveOrder',
       date: new Date().toLocaleString('en-IN', { timeZone:'Asia/Kolkata' }),
@@ -120,6 +136,7 @@ export default function CheckoutClient() {
       document.querySelector('.form-col')?.scrollIntoView({ behavior:'smooth', block:'start' });
       return;
     }
+    setPayError('');
     setPaying(true);
 
     const orderData = {
@@ -132,7 +149,7 @@ export default function CheckoutClient() {
     // Guard every Razorpay/window access — only ever runs in the browser.
     if (typeof window === 'undefined' || !(window as { Razorpay?: unknown }).Razorpay) {
       setPaying(false);
-      alert('Payment system is still loading. Please wait a moment and try again.');
+      setPayError('Payment system is still loading. Please wait a moment and try again.');
       return;
     }
 
@@ -151,17 +168,41 @@ export default function CheckoutClient() {
       },
       theme: { color: '#e8260a' },
       modal: { ondismiss: () => setPaying(false) },
-      handler: async (response: { razorpay_payment_id: string }) => {
-        await saveToSheets(orderData, response.razorpay_payment_id);
+      // The ONLY place an order is saved or the customer is redirected. Razorpay
+      // invokes this solely after a payment it has itself confirmed as captured.
+      handler: async (response: { razorpay_payment_id?: string }) => {
+        const paymentId = response?.razorpay_payment_id;
+
+        // No id, malformed id, or anything that isn't `pay_<alphanumeric>`:
+        // save nothing, send no confirmation, do not redirect.
+        if (!isValidRazorpayPaymentId(paymentId)) {
+          setPaying(false);
+          setPayError(UNVERIFIED_PAYMENT_MSG);
+          return;
+        }
+
+        try {
+          await saveToSheets(orderData, paymentId);
+        } catch {
+          // Payment is real but we could not record it — never silently drop it.
+          setPaying(false);
+          setPayError(
+            `Your payment went through (ref ${paymentId}) but we could not save your order. ` +
+            'Please contact us with this reference and we will confirm it manually.'
+          );
+          return;
+        }
+
         const p = new URLSearchParams({
-          name: form.name, qty: String(qty), amount: String(total), paymentId: response.razorpay_payment_id,
+          name: form.name, qty: String(qty), amount: String(total), paymentId,
         });
         window.location.href = `/thankyou/?${p.toString()}`;
       },
     });
-    rzp.on('payment.failed', (r: { error: { description: string } }) => {
+    // Failed payment: no save, no redirect.
+    rzp.on('payment.failed', (r: { error?: { description?: string } }) => {
       setPaying(false);
-      alert(`Payment failed: ${r.error.description}. Please try again.`);
+      setPayError(`Payment failed: ${r?.error?.description || 'the payment was not completed'}. Please try again.`);
     });
     rzp.open();
   };
@@ -235,6 +276,7 @@ export default function CheckoutClient() {
         .pay-btn:disabled{opacity:.6;cursor:not-allowed}
         .spinner{width:18px;height:18px;border:2px solid rgba(255,255,255,.35);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite}
         @keyframes spin{to{transform:rotate(360deg)}}
+        .pay-error{margin:10px 0 0;padding:10px 12px;border:1px solid var(--red);background:var(--red-light);color:var(--red-dark);border-radius:3px;font-size:.8rem;line-height:1.45}
         .pay-secure{display:flex;align-items:center;justify-content:center;gap:6px;margin-top:12px;font-size:.74rem;color:var(--gray-400)}
         .mobile-summary-bar{display:none;background:#fff;border-bottom:1px solid var(--gray-200);padding:10px 16px}
         @media(max-width:760px){.mobile-summary-bar{display:block}}
@@ -382,6 +424,7 @@ export default function CheckoutClient() {
             <button className="pay-btn" onClick={handlePay} disabled={paying}>
               {paying ? <span className="spinner" /> : `Pay ₹${totalFmt} Securely`}
             </button>
+            {payError && <div className="pay-error" role="alert">{payError}</div>}
             <div className="pay-secure">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
               Secured by Razorpay · 256-bit SSL
@@ -392,6 +435,7 @@ export default function CheckoutClient() {
 
       {/* Mobile fixed pay bar */}
       <div className="mobile-pay-bar">
+        {payError && <div className="pay-error" style={{ marginTop:0, marginBottom:10 }} role="alert">{payError}</div>}
         <button className="pay-btn" onClick={handlePay} disabled={paying}>
           {paying ? <span className="spinner" /> : `Pay ₹${totalFmt} Securely`}
         </button>
