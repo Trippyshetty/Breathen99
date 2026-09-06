@@ -21,11 +21,18 @@ const UNVERIFIED_PAYMENT_MSG = 'Payment could not be verified. Please try again.
 // number, which breaks hydration. This is identical everywhere.
 function inr(n: number): string {
   if (!Number.isFinite(n)) return '0';
+  const sign = n < 0 ? '-' : '';
   const s = Math.round(Math.abs(n)).toString();
-  const last3 = s.slice(-3);
-  const rest = s.slice(0, -3);
-  const grouped = rest ? `${rest.replace(/B(?=(d{2})+(?!d))/g, ',')},${last3}` : last3;
-  return `${n < 0 ? '-' : ''}${grouped}`;
+  if (s.length <= 3) return sign + s;
+  const tail = s.slice(-3);
+  let head = s.slice(0, -3);
+  const groups: string[] = [];
+  while (head.length > 2) {
+    groups.unshift(head.slice(-2));
+    head = head.slice(0, -2);
+  }
+  if (head) groups.unshift(head);
+  return `${sign}${groups.join(',')},${tail}`;
 }
 
 // IST is a fixed UTC+5:30 with no DST, so this needs no timezone database.

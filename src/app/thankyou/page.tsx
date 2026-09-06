@@ -7,9 +7,16 @@ import Link from 'next/link';
 function inr(n: number): string {
   if (!Number.isFinite(n)) return '0';
   const s = Math.round(Math.abs(n)).toString();
-  const last3 = s.slice(-3);
-  const rest = s.slice(0, -3);
-  return rest ? `${rest.replace(/B(?=(d{2})+(?!d))/g, ',')},${last3}` : last3;
+  if (s.length <= 3) return s;
+  const tail = s.slice(-3);
+  let head = s.slice(0, -3);
+  const groups: string[] = [];
+  while (head.length > 2) {
+    groups.unshift(head.slice(-2));
+    head = head.slice(0, -2);
+  }
+  if (head) groups.unshift(head);
+  return `${groups.join(',')},${tail}`;
 }
 
 export default function ThankyouPage() {
