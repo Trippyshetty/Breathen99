@@ -65,25 +65,26 @@ export default function ThankyouPage() {
         </div>
         <h1 className="ty-headline">Order Confirmed!</h1>
         <p className="ty-sub">
-          {data.name ? `Thank you, ${data.name.split(' ')[0]}! ` : 'Thank you! '}
-          Your breathEN oxygen {parseInt(data.qty)>1?'canisters are':'canister is'} on the way. You&apos;ll receive a confirmation shortly.
+          {(data.name ? `Thank you, ${data.name.split(' ')[0]}! ` : 'Thank you! ') +
+            `Your breathEN oxygen ${parseInt(data.qty) > 1 ? 'canisters are' : 'canister is'} on the way. ` +
+            "You'll receive a confirmation shortly."}
         </p>
 
         {data.amount && (
           <div className="ty-card">
             <h4>Order Details</h4>
             {data.name && <div className="ty-row"><span className="label">Name</span><span>{data.name}</span></div>}
-            <div className="ty-row"><span className="label">Quantity</span><span>{data.qty} can{parseInt(data.qty)>1?'s':''}</span></div>
-            <div className="ty-row"><span className="label">Amount Paid</span><span>₹{inr(parseInt(data.amount, 10))}</span></div>
+            <div className="ty-row"><span className="label">Quantity</span><span>{`${data.qty} can${parseInt(data.qty)>1?'s':''}`}</span></div>
+            <div className="ty-row"><span className="label">Amount Paid</span><span>{`₹${inr(parseInt(data.amount, 10))}`}</span></div>
             <div className="ty-row"><span className="label">Shipping</span><span style={{ color:'#1a8a3a' }}>FREE</span></div>
-            {data.paymentId && <div className="ty-pid">Payment ID: {data.paymentId}</div>}
+            {data.paymentId && <div className="ty-pid">{`Payment ID: ${data.paymentId}`}</div>}
           </div>
         )}
 
         <Link href="/" className="btn-home">Back to breathEN</Link>
 
         <p className="whatsapp-note">
-          Questions? WhatsApp us at{' '}
+          <span>Questions? WhatsApp us at </span>
           <a href="https://wa.me/919819250202" target="_blank" rel="noopener">+91 98192 50202</a>
         </p>
       </div>

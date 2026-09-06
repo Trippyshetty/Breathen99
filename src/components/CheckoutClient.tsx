@@ -322,18 +322,18 @@ export default function CheckoutClient() {
         </Link>
         <Link href="/" className="topbar-back">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
-          Back to site
+          <span>Back to site</span>
         </Link>
       </div>
 
       <div className="trust-bar">
-        Free Shipping Across India <span>·</span> Secure Razorpay Checkout <span>·</span> 99% Pure O₂
+        <span>Free Shipping Across India</span> <span>·</span> <span>Secure Razorpay Checkout</span> <span>·</span> <span>99% Pure O₂</span>
       </div>
 
       <div className="mobile-summary-bar">
         <div className="msb-row">
-          <span>breathEN × {qty}</span>
-          <span className="msb-total">₹{totalFmt}</span>
+          <span>{`breathEN × ${qty}`}</span>
+          <span className="msb-total">{`₹${totalFmt}`}</span>
         </div>
         {(tier.discountPct > 0 || couponAmt > 0) && (
           <div className="msb-row" style={{ fontSize:11, color:'#1a8a3a', marginTop:2 }}>
@@ -413,7 +413,7 @@ export default function CheckoutClient() {
               {CONFIG.BULK_TIERS.map((t,i)=>{
                 const active = qty >= t.min && qty <= t.max;
                 const badge = t.discountPct===33 ? '🎁 BUY 4 GET 2 FREE' : t.discountPct>0 ? `${t.discountPct}% OFF` : 'BASE PRICE';
-                return <div key={i} className={`bulk-tier${active?' active':''}`}><span className="bulk-tier-badge">{badge}</span><span className="bulk-tier-label">{t.label} — {t.note}</span></div>;
+                return <div key={i} className={`bulk-tier${active?' active':''}`}><span className="bulk-tier-badge">{badge}</span><span className="bulk-tier-label">{`${t.label} — ${t.note}`}</span></div>;
               })}
             </div>
           </div>
@@ -438,26 +438,26 @@ export default function CheckoutClient() {
               <div className="summary-product-info">
                 <div className="summary-product-name">breathEN Oxygen Canister</div>
                 <div className="summary-product-sub">99% Pure · Up to 200 shots</div>
-                <div className="summary-mrp-line"><span className="summary-mrp">MRP ₹{CONFIG.MRP_PRICE}</span><span className="summary-sale">45% OFF</span></div>
+                <div className="summary-mrp-line"><span className="summary-mrp">{`MRP ₹${CONFIG.MRP_PRICE}`}</span><span className="summary-sale">45% OFF</span></div>
               </div>
-              <div className="summary-product-qty">×{qty}</div>
+              <div className="summary-product-qty">{`×${qty}`}</div>
             </div>
 
-            <div className="summary-line"><span>Subtotal ({qty} can{qty>1?'s':''})</span><span>₹{inr(base)}</span></div>
-            {tier.discountPct>0 && <div className="summary-line discount"><span>{tier.discountPct===33?'Buy 4 Get 2 Free':`Bulk discount (${tier.discountPct}%)`}</span><span>−₹{inr(bulkAmt)}</span></div>}
-            {coupon.applied && couponAmt>0 && <div className="summary-line coupon"><span>Coupon ({coupon.code})</span><span>−₹{inr(couponAmt)}</span></div>}
+            <div className="summary-line"><span>{`Subtotal (${qty} can${qty>1?'s':''})`}</span><span>{`₹${inr(base)}`}</span></div>
+            {tier.discountPct>0 && <div className="summary-line discount"><span>{tier.discountPct===33?'Buy 4 Get 2 Free':`Bulk discount (${tier.discountPct}%)`}</span><span>{`−₹${inr(bulkAmt)}`}</span></div>}
+            {coupon.applied && couponAmt>0 && <div className="summary-line coupon"><span>{`Coupon (${coupon.code})`}</span><span>{`−₹${inr(couponAmt)}`}</span></div>}
             <div className="summary-line"><span>Shipping</span><span style={{ color:'#1a8a3a', fontWeight:500 }}>FREE</span></div>
             <hr className="summary-divider" />
-            <div className="summary-total"><span>Total</span><span>₹{totalFmt}</span></div>
+            <div className="summary-total"><span>Total</span><span>{`₹${totalFmt}`}</span></div>
             <div className="summary-total-sub">Inclusive of all taxes</div>
 
             <button className="pay-btn" onClick={handlePay} disabled={paying}>
-              {paying ? <span className="spinner" /> : `Pay ₹${totalFmt} Securely`}
+              {paying ? <span className="spinner" /> : <span>{`Pay ₹${totalFmt} Securely`}</span>}
             </button>
             {payError && <div className="pay-error" role="alert">{payError}</div>}
             <div className="pay-secure">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-              Secured by Razorpay · 256-bit SSL
+              <span>Secured by Razorpay · 256-bit SSL</span>
             </div>
           </div>
         </div>
@@ -467,7 +467,7 @@ export default function CheckoutClient() {
       <div className="mobile-pay-bar">
         {payError && <div className="pay-error" style={{ marginTop:0, marginBottom:10 }} role="alert">{payError}</div>}
         <button className="pay-btn" onClick={handlePay} disabled={paying}>
-          {paying ? <span className="spinner" /> : `Pay ₹${totalFmt} Securely`}
+          {paying ? <span className="spinner" /> : <span>{`Pay ₹${totalFmt} Securely`}</span>}
         </button>
       </div>
     </>

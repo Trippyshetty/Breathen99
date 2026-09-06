@@ -18,8 +18,49 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" translate="no">
       <head>
+        <meta name="google" content="notranslate" />
+        {/*
+          Google Translate rewrites text nodes into <font> wrappers. If it runs
+          before React hydrates, React's reconciler later tries to remove or
+          reorder nodes that are no longer where it left them, and the DOM throws
+          NotFoundError from removeChild. That happens at the document root, so
+          it takes down the whole page rather than one component.
+
+          The meta tag and translate="no" above are the real fix. This patch is
+          the safety net for the cases they do not cover — a reader mode, an
+          in-app browser, or a user explicitly choosing "Translate this page".
+          It only changes behaviour in the exact case that would otherwise throw:
+          the node is not a child of the parent React thinks it belongs to.
+
+          Must run before hydration, so it is inline in <head>.
+        */}
+        <script
+          dangerouslySetInnerHTML={{ __html: `
+(function(){
+  if (typeof Node !== 'function' || !Node.prototype) return;
+
+  var realRemoveChild = Node.prototype.removeChild;
+  Node.prototype.removeChild = function(child) {
+    if (child && child.parentNode !== this) {
+      try { window.__domPatchHits = (window.__domPatchHits || 0) + 1; } catch (e) {}
+      return child;
+    }
+    return realRemoveChild.apply(this, arguments);
+  };
+
+  var realInsertBefore = Node.prototype.insertBefore;
+  Node.prototype.insertBefore = function(newNode, referenceNode) {
+    if (referenceNode && referenceNode.parentNode !== this) {
+      try { window.__domPatchHits = (window.__domPatchHits || 0) + 1; } catch (e) {}
+      return newNode;
+    }
+    return realInsertBefore.apply(this, arguments);
+  };
+})();
+` }}
+        />
         {/* TEMPORARY: capture errors that fire before React's boundary sees them. */}
         <script
           dangerouslySetInnerHTML={{ __html: `
