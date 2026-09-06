@@ -1,7 +1,5 @@
 'use client';
 
-import ErrorDiagnostics from '@/components/ErrorDiagnostics';
-
 // Last-resort boundary: catches failures in the root layout itself, which a
 // route-level error.tsx cannot reach. Must render its own <html>/<body>.
 export default function GlobalError({
@@ -16,7 +14,7 @@ export default function GlobalError({
   return (
     <html lang="en">
       <body style={{ margin: 0, fontFamily: 'system-ui, -apple-system, Segoe UI, Roboto, sans-serif' }}>
-        <div style={{ maxWidth: 640, margin: '0 auto', padding: '64px 20px', textAlign: 'center', color: '#0a0a0a' }}>
+        <div style={{ maxWidth: 520, margin: '0 auto', padding: '64px 20px', textAlign: 'center', color: '#0a0a0a' }}>
           <h1 style={{ fontSize: '1.4rem', margin: '0 0 12px', fontWeight: 600 }}>Something went wrong</h1>
           <p style={{ color: '#555', lineHeight: 1.6, margin: '0 0 28px' }}>
             No payment has been taken and no order has been placed.
@@ -33,8 +31,6 @@ export default function GlobalError({
               Order on WhatsApp: +91 98192 50202
             </a>
           </div>
-
-          <ErrorDiagnostics boundary="global-error.tsx (root layout / root hydration)" error={error} />
         </div>
       </body>
     </html>

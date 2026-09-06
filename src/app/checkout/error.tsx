@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect } from 'react';
-import ErrorDiagnostics from '@/components/ErrorDiagnostics';
 
 // Route-level error boundary. If anything in the checkout tree throws, the
 // customer gets a usable page with a way out instead of Next's bare
@@ -18,7 +17,7 @@ export default function CheckoutError({
   }, [error]);
 
   return (
-    <div style={{ maxWidth: 640, margin: '0 auto', padding: '64px 20px', textAlign: 'center',
+    <div style={{ maxWidth: 520, margin: '0 auto', padding: '64px 20px', textAlign: 'center',
                   fontFamily: 'DM Sans, system-ui, -apple-system, Segoe UI, Roboto, sans-serif', color: '#0a0a0a' }}>
       <h1 style={{ fontSize: '1.4rem', margin: '0 0 12px', fontWeight: 600 }}>
         We couldn&apos;t load the checkout
@@ -46,8 +45,6 @@ export default function CheckoutError({
       <div style={{ marginTop: 24, fontSize: '.8rem' }}>
         <a href="/" style={{ color: '#999', textDecoration: 'none' }}>← Back to breathEN</a>
       </div>
-
-      <ErrorDiagnostics boundary="checkout/error.tsx" error={error} />
     </div>
   );
 }

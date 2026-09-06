@@ -20,23 +20,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <head>
-        {/* TEMPORARY: capture errors that fire before React's boundary sees them. */}
-        <script
-          dangerouslySetInnerHTML={{ __html: `
-(function(){
-  window.__earlyErrors = window.__earlyErrors || [];
-  function rec(o){ try { if (window.__earlyErrors.length < 20) window.__earlyErrors.push(o); } catch (e) {} }
-  window.addEventListener('error', function(e){
-    rec({ kind:'error', msg:(e && e.message) || String(e), src:e && e.filename,
-          line:e && e.lineno, col:e && e.colno, stack:e && e.error && e.error.stack });
-  }, true);
-  window.addEventListener('unhandledrejection', function(e){
-    var r = e && e.reason;
-    rec({ kind:'unhandledrejection', msg:(r && r.message) || String(r), stack:r && r.stack });
-  });
-})();
-` }}
-        />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link
