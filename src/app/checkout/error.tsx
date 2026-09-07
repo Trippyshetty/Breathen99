@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react';
 import ErrorDiagnostics from '@/components/ErrorDiagnostics';
+import { EMAIL_ORDER_ISSUE, WHATSAPP_ORDER_ISSUE } from '@/lib/contact';
 
 // Route-level error boundary. If anything in the checkout tree throws, the
 // customer gets a usable page with a way out instead of Next's bare
@@ -39,8 +40,13 @@ export default function CheckoutError({
       </button>
 
       <div style={{ marginTop: 20, fontSize: '.85rem' }}>
-        <a href="https://wa.me/919819250202" style={{ color: '#e8260a', textDecoration: 'none' }}>
+        <a href={WHATSAPP_ORDER_ISSUE} target="_blank" rel="noopener" style={{ color: '#e8260a', textDecoration: 'none' }}>
           Order on WhatsApp: +91 98192 50202
+        </a>
+      </div>
+      <div style={{ marginTop: 10, fontSize: '.85rem' }}>
+        <a href={EMAIL_ORDER_ISSUE} style={{ color: '#e8260a', textDecoration: 'none' }}>
+          Or email info@breathen99.com
         </a>
       </div>
       <div style={{ marginTop: 24, fontSize: '.8rem' }}>

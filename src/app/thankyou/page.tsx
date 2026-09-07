@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
+import { WHATSAPP_ORDER_QUESTION } from '@/lib/contact';
 
 // Same manual grouping as the checkout page: identical output on every device.
 function inr(n: number): string {
@@ -85,7 +86,7 @@ export default function ThankyouPage() {
 
         <p className="whatsapp-note">
           <span>Questions? WhatsApp us at </span>
-          <a href="https://wa.me/919819250202" target="_blank" rel="noopener">+91 98192 50202</a>
+          <a href={WHATSAPP_ORDER_QUESTION} target="_blank" rel="noopener">+91 98192 50202</a>
         </p>
       </div>
     </>

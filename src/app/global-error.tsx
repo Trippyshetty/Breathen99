@@ -1,6 +1,7 @@
 'use client';
 
 import ErrorDiagnostics from '@/components/ErrorDiagnostics';
+import { EMAIL_ORDER_ISSUE, WHATSAPP_ORDER_ISSUE } from '@/lib/contact';
 
 // Last-resort boundary: catches failures in the root layout itself, which a
 // route-level error.tsx cannot reach. Must render its own <html>/<body>.
@@ -29,8 +30,13 @@ export default function GlobalError({
             Try again
           </button>
           <div style={{ marginTop: 20, fontSize: '.85rem' }}>
-            <a href="https://wa.me/919819250202" style={{ color: '#e8260a', textDecoration: 'none' }}>
+            <a href={WHATSAPP_ORDER_ISSUE} target="_blank" rel="noopener" style={{ color: '#e8260a', textDecoration: 'none' }}>
               Order on WhatsApp: +91 98192 50202
+            </a>
+          </div>
+          <div style={{ marginTop: 10, fontSize: '.85rem' }}>
+            <a href={EMAIL_ORDER_ISSUE} style={{ color: '#e8260a', textDecoration: 'none' }}>
+              Or email info@breathen99.com
             </a>
           </div>
 
